@@ -1,7 +1,7 @@
 {
   "name": "bricolage-helper",
   "version": "1.0.0",
-  "main": "__generated__/AppEntry.js",
+  "main": "expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
