@@ -4,7 +4,6 @@ import {
   Gesture,
   GestureDetector,
   GestureHandlerRootView,
-  State,
 } from "react-native-gesture-handler";
 import {
   Line,
@@ -27,24 +26,9 @@ const DrawingCanvas = ({
   const [startPoint, setStartPoint] = useState(null);
   const [endPoint, setEndPoint] = useState(null);
 
-  const onGestureEvent = (event) => {
-    const { x, y, state } = event.nativeEvent;
-
-    if (state === State.BEGAN) {
-      setIsDrawing(true);
-      setStartPoint({ x, y });
-      setEndPoint({ x, y });
-    } else if (state === State.ACTIVE && isDrawing) {
-      setEndPoint({ x, y });
-    } else if (state === State.END && isDrawing) {
-      finishDrawing();
-    } else if (state === State.CANCELLED || state === State.FAILED) {
-      cancelDrawing();
-    }
-  };
-
   const panGesture = Gesture.Pan()
     .onStart((event) => {
+      console.log("🎨 Dessin commencé:", { tool: currentTool, x: event.x, y: event.y });
       setIsDrawing(true);
       setStartPoint({ x: event.x, y: event.y });
       setEndPoint({ x: event.x, y: event.y });
@@ -55,7 +39,14 @@ const DrawingCanvas = ({
       }
     })
     .onEnd(() => {
+      console.log("🎨 Dessin terminé");
       finishDrawing();
+    })
+    .onFinalize(() => {
+      // Nettoyage en cas d'annulation
+      if (isDrawing) {
+        cancelDrawing();
+      }
     });
 
   const finishDrawing = () => {
