@@ -15,24 +15,43 @@ export default function App() {
   const [isCalibrated, setIsCalibrated] = useState(false);
 
   useEffect(() => {
+    console.log('⏳ Calibration en cours...');
+    
     // Calcul automatique des DPI au démarrage
     const calculatedPixelsPerCM = calculatePixelsPerCM();
     setPixelsPerCM(calculatedPixelsPerCM);
     setIsCalibrated(true);
     
-    console.log('DPI Info:', {
+    console.log('📱 Informations écran:', {
       screenWidth,
       screenHeight,
       pixelRatio: PixelRatio.get(),
       pixelsPerCM: calculatedPixelsPerCM
     });
+    
+    console.log('🚀 Application démarrée');
   }, []);
 
+  useEffect(() => {
+    console.log('✅ Application prête:', {
+      isCalibrated,
+      pixelsPerCM,
+      currentTool,
+      drawingsCount: drawings.length
+    });
+  }, [isCalibrated, pixelsPerCM, currentTool, drawings.length]);
+
   const handleToolChange = (tool) => {
+    console.log('🔧 Changement d\'outil:', tool);
     setCurrentTool(tool);
   };
 
   const handleAddDrawing = (drawing) => {
+    console.log('✏️ Nouveau dessin ajouté:', {
+      type: drawing.type,
+      measurement: drawing.measurementText
+    });
+    
     setDrawings(prev => [...prev, {
       ...drawing,
       id: Date.now() + Math.random(),
@@ -46,7 +65,14 @@ export default function App() {
       'Voulez-vous vraiment effacer tous les dessins ?',
       [
         { text: 'Annuler', style: 'cancel' },
-        { text: 'Effacer', style: 'destructive', onPress: () => setDrawings([]) }
+        { 
+          text: 'Effacer', 
+          style: 'destructive', 
+          onPress: () => {
+            console.log('🗑️ Tous les dessins effacés');
+            setDrawings([]);
+          }
+        }
       ]
     );
   };
