@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import React, { useState, useRef } from "react";
+import { StyleSheet, View, Text } from "react-native";
 import {
   Gesture,
   GestureDetector,
@@ -25,22 +25,36 @@ const DrawingCanvas = ({
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPoint, setStartPoint] = useState(null);
   const [endPoint, setEndPoint] = useState(null);
+  const svgRef = useRef(null);
 
   const panGesture = Gesture.Pan()
     .onStart((event) => {
-      console.log("🎨 Dessin commencé:", { tool: currentTool, x: event.x, y: event.y });
-      setIsDrawing(true);
-      setStartPoint({ x: event.x, y: event.y });
-      setEndPoint({ x: event.x, y: event.y });
+      try {
+        console.log("🎨 Dessin commencé:", { tool: currentTool, x: event.x, y: event.y });
+        setIsDrawing(true);
+        setStartPoint({ x: event.x, y: event.y });
+        setEndPoint({ x: event.x, y: event.y });
+      } catch (error) {
+        console.error("Erreur onStart:", error);
+      }
     })
     .onUpdate((event) => {
-      if (isDrawing) {
-        setEndPoint({ x: event.x, y: event.y });
+      try {
+        if (isDrawing && startPoint) {
+          setEndPoint({ x: event.x, y: event.y });
+        }
+      } catch (error) {
+        console.error("Erreur onUpdate:", error);
       }
     })
     .onEnd(() => {
-      console.log("🎨 Dessin terminé");
-      finishDrawing();
+      try {
+        console.log("🎨 Dessin terminé");
+        finishDrawing();
+      } catch (error) {
+        console.error("Erreur onEnd:", error);
+        cancelDrawing();
+      }
     })
     .onFinalize(() => {
       // Nettoyage en cas d'annulation
@@ -50,66 +64,75 @@ const DrawingCanvas = ({
     });
 
   const finishDrawing = () => {
-    if (!startPoint || !endPoint || !pixelsPerCM) {
+    try {
+      if (!startPoint || !endPoint || !pixelsPerCM) {
+        console.log("Annulation: données manquantes");
+        cancelDrawing();
+        return;
+      }
+
+      let drawing = null;
+
+      if (currentTool === "line") {
+        const distance = Math.sqrt(
+          Math.pow(endPoint.x - startPoint.x, 2) +
+            Math.pow(endPoint.y - startPoint.y, 2)
+        );
+
+        // Ignorer les lignes trop courtes (moins de 5 pixels)
+        if (distance < 5) {
+          console.log("Ligne trop courte");
+          cancelDrawing();
+          return;
+        }
+
+        const realDistance = pixelsToCM(distance, pixelsPerCM);
+
+        drawing = {
+          type: "line",
+          startX: startPoint.x,
+          startY: startPoint.y,
+          endX: endPoint.x,
+          endY: endPoint.y,
+          measurement: realDistance,
+          measurementText: formatMeasurement(realDistance),
+        };
+      } else if (currentTool === "circle") {
+        const radius = Math.sqrt(
+          Math.pow(endPoint.x - startPoint.x, 2) +
+            Math.pow(endPoint.y - startPoint.y, 2)
+        );
+
+        // Ignorer les cercles trop petits (moins de 10 pixels de rayon)
+        if (radius < 10) {
+          console.log("Cercle trop petit");
+          cancelDrawing();
+          return;
+        }
+
+        const realRadius = pixelsToCM(radius, pixelsPerCM);
+        const realDiameter = realRadius * 2;
+
+        drawing = {
+          type: "circle",
+          centerX: startPoint.x,
+          centerY: startPoint.y,
+          radius: radius,
+          measurement: realDiameter,
+          measurementText: `⌀ ${formatMeasurement(realDiameter)}`,
+        };
+      }
+
+      if (drawing) {
+        console.log("Ajout du dessin:", drawing.type);
+        onAddDrawing(drawing);
+      }
+
       cancelDrawing();
-      return;
+    } catch (error) {
+      console.error("Erreur finishDrawing:", error);
+      cancelDrawing();
     }
-
-    let drawing = null;
-
-    if (currentTool === "line") {
-      const distance = Math.sqrt(
-        Math.pow(endPoint.x - startPoint.x, 2) +
-          Math.pow(endPoint.y - startPoint.y, 2)
-      );
-
-      // Ignorer les lignes trop courtes (moins de 5 pixels)
-      if (distance < 5) {
-        cancelDrawing();
-        return;
-      }
-
-      const realDistance = pixelsToCM(distance, pixelsPerCM);
-
-      drawing = {
-        type: "line",
-        startX: startPoint.x,
-        startY: startPoint.y,
-        endX: endPoint.x,
-        endY: endPoint.y,
-        measurement: realDistance,
-        measurementText: formatMeasurement(realDistance),
-      };
-    } else if (currentTool === "circle") {
-      const radius = Math.sqrt(
-        Math.pow(endPoint.x - startPoint.x, 2) +
-          Math.pow(endPoint.y - startPoint.y, 2)
-      );
-
-      // Ignorer les cercles trop petits (moins de 10 pixels de rayon)
-      if (radius < 10) {
-        cancelDrawing();
-        return;
-      }
-
-      const realRadius = pixelsToCM(radius, pixelsPerCM);
-      const realDiameter = realRadius * 2;
-
-      drawing = {
-        type: "circle",
-        centerX: startPoint.x,
-        centerY: startPoint.y,
-        radius: radius,
-        measurement: realDiameter,
-        measurementText: `⌀ ${formatMeasurement(realDiameter)}`,
-      };
-    }
-
-    if (drawing) {
-      onAddDrawing(drawing);
-    }
-
-    cancelDrawing();
   };
 
   const cancelDrawing = () => {
@@ -119,134 +142,159 @@ const DrawingCanvas = ({
   };
 
   const renderCurrentDrawing = () => {
-    if (!isDrawing || !startPoint || !endPoint || !pixelsPerCM) return null;
+    try {
+      if (!isDrawing || !startPoint || !endPoint || !pixelsPerCM) return null;
 
-    if (currentTool === "line") {
-      const distance = Math.sqrt(
-        Math.pow(endPoint.x - startPoint.x, 2) +
-          Math.pow(endPoint.y - startPoint.y, 2)
-      );
-      const realDistance = pixelsToCM(distance, pixelsPerCM);
-      const midX = (startPoint.x + endPoint.x) / 2;
-      const midY = (startPoint.y + endPoint.y) / 2;
-
-      return (
-        <React.Fragment>
-          <Line
-            x1={startPoint.x}
-            y1={startPoint.y}
-            x2={endPoint.x}
-            y2={endPoint.y}
-            stroke={COLORS.WHITE}
-            strokeWidth={DIMENSIONS.STROKE_WIDTH}
-          />
-          <SvgText
-            x={midX}
-            y={midY - 10}
-            fill={COLORS.YELLOW}
-            fontSize="14"
-            textAnchor="middle"
-            fontWeight="bold"
-          >
-            {formatMeasurement(realDistance)}
-          </SvgText>
-        </React.Fragment>
-      );
-    } else if (currentTool === "circle") {
-      const radius = Math.sqrt(
-        Math.pow(endPoint.x - startPoint.x, 2) +
-          Math.pow(endPoint.y - startPoint.y, 2)
-      );
-      const realRadius = pixelsToCM(radius, pixelsPerCM);
-      const realDiameter = realRadius * 2;
-
-      return (
-        <React.Fragment>
-          <SvgCircle
-            cx={startPoint.x}
-            cy={startPoint.y}
-            r={radius}
-            stroke={COLORS.WHITE}
-            strokeWidth={DIMENSIONS.STROKE_WIDTH}
-            fill="none"
-          />
-          <SvgText
-            x={startPoint.x}
-            y={startPoint.y - radius - 15}
-            fill={COLORS.YELLOW}
-            fontSize="14"
-            textAnchor="middle"
-            fontWeight="bold"
-          >
-            ⌀ {formatMeasurement(realDiameter)}
-          </SvgText>
-        </React.Fragment>
-      );
-    }
-  };
-
-  const renderSavedDrawings = () => {
-    return drawings.map((drawing, index) => {
-      const key = drawing.id || `drawing-${index}`;
-
-      if (drawing.type === "line") {
-        const midX = (drawing.startX + drawing.endX) / 2;
-        const midY = (drawing.startY + drawing.endY) / 2;
+      if (currentTool === "line") {
+        const distance = Math.sqrt(
+          Math.pow(endPoint.x - startPoint.x, 2) +
+            Math.pow(endPoint.y - startPoint.y, 2)
+        );
+        
+        if (distance < 1) return null; // Éviter division par zéro
+        
+        const realDistance = pixelsToCM(distance, pixelsPerCM);
+        const midX = (startPoint.x + endPoint.x) / 2;
+        const midY = (startPoint.y + endPoint.y) / 2;
 
         return (
-          <React.Fragment key={key}>
+          <React.Fragment>
             <Line
-              x1={drawing.startX}
-              y1={drawing.startY}
-              x2={drawing.endX}
-              y2={drawing.endY}
+              x1={startPoint.x}
+              y1={startPoint.y}
+              x2={endPoint.x}
+              y2={endPoint.y}
               stroke={COLORS.WHITE}
               strokeWidth={DIMENSIONS.STROKE_WIDTH}
             />
             <SvgText
               x={midX}
               y={midY - 10}
-              fill={COLORS.GRAY_LIGHT}
-              fontSize="12"
+              fill={COLORS.YELLOW}
+              fontSize={14}
               textAnchor="middle"
+              fontWeight="bold"
             >
-              {drawing.measurementText}
+              {formatMeasurement(realDistance)}
             </SvgText>
           </React.Fragment>
         );
-      } else if (drawing.type === "circle") {
+      } else if (currentTool === "circle") {
+        const radius = Math.sqrt(
+          Math.pow(endPoint.x - startPoint.x, 2) +
+            Math.pow(endPoint.y - startPoint.y, 2)
+        );
+        
+        if (radius < 1) return null; // Éviter radius 0
+        
+        const realRadius = pixelsToCM(radius, pixelsPerCM);
+        const realDiameter = realRadius * 2;
+
         return (
-          <React.Fragment key={key}>
+          <React.Fragment>
             <SvgCircle
-              cx={drawing.centerX}
-              cy={drawing.centerY}
-              r={drawing.radius}
+              cx={startPoint.x}
+              cy={startPoint.y}
+              r={radius}
               stroke={COLORS.WHITE}
               strokeWidth={DIMENSIONS.STROKE_WIDTH}
               fill="none"
             />
             <SvgText
-              x={drawing.centerX}
-              y={drawing.centerY - drawing.radius - 15}
-              fill={COLORS.GRAY_LIGHT}
-              fontSize="12"
+              x={startPoint.x}
+              y={startPoint.y - radius - 15}
+              fill={COLORS.YELLOW}
+              fontSize={14}
               textAnchor="middle"
+              fontWeight="bold"
             >
-              {drawing.measurementText}
+              {`⌀ ${formatMeasurement(realDiameter)}`}
             </SvgText>
           </React.Fragment>
         );
       }
-
+    } catch (error) {
+      console.error("Erreur renderCurrentDrawing:", error);
       return null;
-    });
+    }
   };
 
+  const renderSavedDrawings = () => {
+    try {
+      return drawings.map((drawing, index) => {
+        const key = drawing.id || `drawing-${index}`;
+
+        if (drawing.type === "line") {
+          const midX = (drawing.startX + drawing.endX) / 2;
+          const midY = (drawing.startY + drawing.endY) / 2;
+
+          return (
+            <React.Fragment key={key}>
+              <Line
+                x1={drawing.startX}
+                y1={drawing.startY}
+                x2={drawing.endX}
+                y2={drawing.endY}
+                stroke={COLORS.WHITE}
+                strokeWidth={DIMENSIONS.STROKE_WIDTH}
+              />
+              <SvgText
+                x={midX}
+                y={midY - 10}
+                fill={COLORS.GRAY_LIGHT}
+                fontSize={12}
+                textAnchor="middle"
+              >
+                {drawing.measurementText || ""}
+              </SvgText>
+            </React.Fragment>
+          );
+        } else if (drawing.type === "circle") {
+          return (
+            <React.Fragment key={key}>
+              <SvgCircle
+                cx={drawing.centerX}
+                cy={drawing.centerY}
+                r={drawing.radius}
+                stroke={COLORS.WHITE}
+                strokeWidth={DIMENSIONS.STROKE_WIDTH}
+                fill="none"
+              />
+              <SvgText
+                x={drawing.centerX}
+                y={drawing.centerY - drawing.radius - 15}
+                fill={COLORS.GRAY_LIGHT}
+                fontSize={12}
+                textAnchor="middle"
+              >
+                {drawing.measurementText || ""}
+              </SvgText>
+            </React.Fragment>
+          );
+        }
+
+        return null;
+      });
+    } catch (error) {
+      console.error("Erreur renderSavedDrawings:", error);
+      return null;
+    }
+  };
+
+  // Vérification de sécurité des dimensions
+  const safeCanvasWidth = canvasWidth > 0 ? canvasWidth : 100;
+  const safeCanvasHeight = canvasHeight > 0 ? canvasHeight : 100;
+
   return (
-    <GestureHandlerRootView style={[styles.container, { width: canvasWidth }]}>
+    <GestureHandlerRootView style={[styles.container, { width: safeCanvasWidth }]}>
       <GestureDetector gesture={panGesture}>
         <View style={styles.drawingArea}>
-          <Svg width={canvasWidth} height={canvasHeight} style={styles.svg}>
+          <Svg 
+            ref={svgRef}
+            width={safeCanvasWidth} 
+            height={safeCanvasHeight} 
+            style={styles.svg}
+          >
             {renderSavedDrawings()}
             {renderCurrentDrawing()}
           </Svg>
